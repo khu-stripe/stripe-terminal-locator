@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script>
+        (function() {
+            var theme = localStorage.getItem('theme');
+            if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            }
+        })();
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stripe Terminal Locator</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <div class="header-container">
+            <!-- Main Header Content -->
+            <div class="header-content">
+                <div class="header-text">
+                    <h1>Stripe Terminal Locator</h1>
+                    <p>Find Stripe terminal reader locations</p>
+                </div>
+                
+                <!-- Navigation and Authentication Section -->
+                <div class="header-actions">
+                    <a href="/leaderboards.html" class="btn btn-outline leaderboard-btn">
+                        Leaderboards
+                    </a>
+                    <div id="themeToggle" class="theme-toggle" title="Toggle dark mode">
+                        <div class="theme-toggle-track">
+                            <div class="theme-toggle-thumb">🌙</div>
+                        </div>
+                    </div>
+
+                    <div class="auth-section">
+                        <button id="authButton" class="btn btn-primary auth-btn">
+                            Sign In
+                        </button>
+                        <div id="userInfo" class="user-info" style="display: none;">
+                            <!-- User info will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+    </header>
+
+    <main>
+        <div class="container">
+            <!-- Action Bar -->
+            <div class="action-bar">
+                <div class="country-selector-container">
+                    <select id="countrySelector" class="country-selector"></select>
+                </div>
+                <div class="add-location-group">
+                    <button id="addLocationBtn" class="btn btn-primary">
+                        Add New Location
+                    </button>
+                    <span class="add-location-hint" id="addLocationHint">or right-click on map</span>
+                </div>
+                <div class="location-count">
+                    <span id="locationCount">0</span> locations found
+                </div>
+            </div>
+
+            <div class="content-wrapper">
+                <!-- Map Container -->
+                <div class="map-container">
+                    <div id="map"></div>
+                </div>
+
+                <!-- Right Sidebar -->
+                <div class="sidebar">
+                    <!-- Locations List - Full Height -->
+                    <div class="list-container full-height">
+                        <div class="list-header">
+                            <h3>📍 Terminal Locations</h3>
+                            <div class="search-container">
+                                <input type="text" id="searchInput" placeholder="Search locations...">
+                            </div>
+                        </div>
+                        <div id="locationsList" class="locations-list scrollable">
+                            <!-- Locations will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Add Location Modal -->
+    <div id="addLocationModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add New Stripe Terminal Location</h2>
+                <span class="close">&times;</span>
+            </div>
+            <form id="addLocationForm">
+                <div class="form-group">
+                    <label for="locationName">Business Name *</label>
+                    <input type="text" id="locationName" required placeholder="e.g., Coffee Bean & Tea Leaf">
+                </div>
+                
+                <div class="form-group">
+                    <label for="locationAddress">Business Name or Address *</label>
+                    <input type="text" id="locationAddress" required placeholder="e.g., 'Starbucks' or '123 Main Street'" autocomplete="off">
+                    <div id="addressSuggestions" class="address-suggestions"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="locationCoordinates">Selected Location</label>
+                    <div id="locationCoordinates" class="coordinates-display">
+                        Right-click on the map (or long press on mobile) to select a location, or search by business name/address in the field above
+                    </div>
+                    <button type="button" id="clearLocationBtn" class="btn btn-secondary btn-small" style="display: none;">Clear Selection</button>
+                </div>
+                
+                <div class="form-group">
+                    <label for="locationDescription">Description</label>
+                    <textarea id="locationDescription" placeholder="Brief description of the business and Stripe terminal availability"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="locationPhotos">Photos (Optional)</label>
+                    <div class="photo-upload-container">
+                        <input type="file" id="locationPhotos" accept="image/*" multiple class="photo-input">
+                        <label for="locationPhotos" class="photo-upload-label">
+                            📷 Choose Photos (Max 5, 10MB each)
+                        </label>
+                        <div id="photoPreview" class="photo-preview"></div>
+                    </div>
+                    <small>Photos will be automatically optimized (resized to 1200px max, compressed)</small>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Location</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Location Modal -->
+    <div id="editLocationModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Edit Location</h2>
+                <span class="close" id="editModalClose">&times;</span>
+            </div>
+            <form id="editLocationForm">
+                <input type="hidden" id="editLocationId">
+                <div class="form-group">
+                    <label for="editLocationName">Business Name *</label>
+                    <input type="text" id="editLocationName" required placeholder="e.g., Coffee Bean & Tea Leaf">
+                </div>
+                
+                <div class="form-group">
+                    <label for="editLocationAddress">Business Name or Address *</label>
+                    <input type="text" id="editLocationAddress" required placeholder="e.g., 'Starbucks' or '123 Main Street'" autocomplete="off">
+                    <div id="editAddressSuggestions" class="address-suggestions"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="editLocationCoordinates">Selected Location</label>
+                    <div id="editLocationCoordinates" class="coordinates-display">
+                        Click on the map to update location
+                    </div>
+                    <button type="button" id="editClearLocationBtn" class="btn btn-secondary btn-small" style="display: none;">Clear Selection</button>
+                </div>
+                
+                <div class="form-group">
+                    <label for="editLocationDescription">Description</label>
+                    <textarea id="editLocationDescription" placeholder="Brief description of the business and Stripe terminal availability"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label>Current Photos</label>
+                    <div id="editCurrentPhotos" class="edit-current-photos"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="editLocationPhotos">Add More Photos (Optional)</label>
+                    <div class="photo-upload-container">
+                        <input type="file" id="editLocationPhotos" accept="image/*" multiple class="photo-input">
+                        <label for="editLocationPhotos" class="photo-upload-label">
+                            📷 Choose Photos (Max 5, 10MB each)
+                        </label>
+                        <div id="editPhotoPreview" class="photo-preview"></div>
+                    </div>
+                    <small>Photos will be auto-optimized • Total limit: 10 per location</small>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="editCancelBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Authentication Modal -->
+    <div id="authModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Welcome to Stripe Terminal Locator</h2>
+                <span class="close" id="authModalClose">&times;</span>
+            </div>
+            <div class="auth-tabs">
+                <button id="signinTab" class="auth-tab active" onclick="switchAuthTab('signin')">Sign In</button>
+                <button id="signupTab" class="auth-tab" onclick="switchAuthTab('signup')">Sign Up</button>
+            </div>
+            
+            <!-- Sign In Form -->
+            <div id="signinForm" class="auth-form">
+                <button id="googleSignInBtn" class="btn btn-google">
+                    <img src="https://developers.google.com/identity/images/g-logo.png" alt="Google" class="google-icon">
+                    Continue with Google
+                </button>
+                
+                <div class="divider">
+                    <span>or</span>
+                </div>
+                
+                <form id="emailSignInForm">
+                    <div class="form-group">
+                        <label for="signinEmail">Email</label>
+                        <input type="email" id="signinEmail" required placeholder="your@email.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="signinPassword">Password</label>
+                        <input type="password" id="signinPassword" required placeholder="Your password">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full">Sign In</button>
+                </form>
+            </div>
+            
+            <!-- Sign Up Form -->
+            <div id="signupForm" class="auth-form" style="display: none;">
+                <button id="googleSignUpBtn" class="btn btn-google">
+                    <img src="https://developers.google.com/identity/images/g-logo.png" alt="Google" class="google-icon">
+                    Continue with Google
+                </button>
+                
+                <div class="divider">
+                    <span>or</span>
+                </div>
+                
+                <form id="emailSignUpForm">
+                    <div class="form-group">
+                        <label for="signupNickname">Nickname *</label>
+                        <input type="text" id="signupNickname" required placeholder="Your display name">
+                    </div>
+                    <div class="form-group">
+                        <label for="signupEmail">Email</label>
+                        <input type="email" id="signupEmail" required placeholder="your@email.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="signupPassword">Password</label>
+                        <input type="password" id="signupPassword" required placeholder="Choose a password">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full">Create Account</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Nickname Modal (for Google sign-in users) -->
+    <div id="nicknameModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Complete Your Profile</h2>
+            </div>
+            <form id="nicknameForm">
+                <div class="form-group">
+                    <label for="userNickname">Choose a Nickname *</label>
+                    <input type="text" id="userNickname" required placeholder="Your display name" maxlength="50">
+                    <small>This will be shown on the leaderboard</small>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Save & Continue</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Loading Spinner -->
+    <div id="loadingSpinner" class="loading-spinner">
+        <div class="spinner"></div>
+        <p>Loading locations...</p>
+    </div>
+
+    <!-- Photo Viewer Modal -->
+    <div id="photoViewerModal" class="modal photo-viewer-modal">
+        <div class="photo-viewer-content">
+            <button class="photo-viewer-close">&times;</button>
+            <img id="photoViewerImage" src="" alt="Location photo">
+            <div class="photo-viewer-nav">
+                <button id="photoPrevBtn" class="photo-nav-btn">&larr;</button>
+                <span id="photoCounter" class="photo-counter"></span>
+                <button id="photoNextBtn" class="photo-nav-btn">&rarr;</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaflet JavaScript -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Supabase Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
+    <!-- Country Configuration -->
+    <script src="countries.js"></script>
+
+    <!-- Authentication -->
+    <script type="module" src="supabase-auth.js"></script>
+
+    <!-- Custom JavaScript -->
+    <script type="module" src="app.js"></script>
+
+    <!-- Theme Toggle & Hints -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var toggle = document.getElementById('themeToggle');
+            if (toggle) {
+                var thumb = toggle.querySelector('.theme-toggle-thumb');
+                function updateIcon() {
+                    var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                    if (thumb) thumb.textContent = isDark ? '☀️' : '🌙';
+                }
+                updateIcon();
+                toggle.addEventListener('click', function() {
+                    var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                    if (isDark) {
+                        document.documentElement.removeAttribute('data-theme');
+                        localStorage.setItem('theme', 'light');
+                    } else {
+                        document.documentElement.setAttribute('data-theme', 'dark');
+                        localStorage.setItem('theme', 'dark');
+                    }
+                    updateIcon();
+                });
+            }
+
+            var hint = document.getElementById('addLocationHint');
+            if (hint && ('ontouchstart' in window || navigator.maxTouchPoints > 0)) {
+                hint.textContent = 'or long-press on map';
+            }
+        });
+    </script>
+</body>
+</html>

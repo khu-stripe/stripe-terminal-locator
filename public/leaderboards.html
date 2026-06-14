@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script>
+        (function() {
+            var theme = localStorage.getItem('theme');
+            if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            }
+        })();
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leaderboards - Stripe Terminal Locator</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .page-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .page-header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+        
+        .page-header h1 {
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .page-header p {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+        }
+        
+        .leaderboards-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        @media (max-width: 768px) {
+            .leaderboards-grid {
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+            }
+        }
+        
+        .leaderboard-card {
+            background: var(--bg-surface);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-sm);
+            overflow: hidden;
+        }
+
+        .leaderboard-card-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border);
+            text-align: center;
+        }
+
+        .leaderboard-card-header h3 {
+            margin: 0;
+            color: var(--text-primary);
+            font-size: 1.3rem;
+        }
+
+        .leaderboard-card-header p {
+            margin: 0.5rem 0 0 0;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+        
+        .leaderboard-card-content {
+            padding: 0;
+        }
+        
+        .leaderboard-item {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid #f8f9fa;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            transition: background-color 0.2s ease;
+        }
+        
+        .leaderboard-item:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .leaderboard-item:last-child {
+            border-bottom: none;
+        }
+        
+        .leaderboard-item.current-user {
+            background: linear-gradient(135deg, #e8f1ff, #f0f7ff);
+            border-left: 4px solid #3498db;
+            color: #2c3e50;
+            border: 1px solid #d0e2f2;
+        }
+        
+        .rank {
+            font-weight: bold;
+            font-size: 1.4rem;
+            min-width: 3.5rem;
+            text-align: center;
+            color: #667eea;
+        }
+
+        .rank.gold { color: #f39c12; font-size: 2.2rem; }
+        .rank.silver { color: #95a5a6; font-size: 2rem; }
+        .rank.bronze { color: #d35400; font-size: 1.8rem; }
+        
+        .leaderboard-item.current-user .rank {
+            color: #2c3e50;
+        }
+        
+        .leaderboard-item.current-user .rank.gold {
+            color: #f39c12;
+        }
+        
+        .leaderboard-item.current-user .rank.silver {
+            color: #95a5a6;
+        }
+        
+        .leaderboard-item.current-user .rank.bronze {
+            color: #d35400;
+        }
+        
+        .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid #e1e8ed;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .avatar:hover {
+            transform: scale(1.15);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+
+        .avatar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 10000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .avatar-overlay.active {
+            display: flex;
+        }
+
+        .avatar-preview {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 4px solid white;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        
+        .user-info {
+            flex: 1;
+        }
+        
+        .nickname {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 0.2rem;
+        }
+        
+        .leaderboard-item.current-user .nickname {
+            color: #2c3e50;
+            font-weight: 700;
+        }
+        
+        .locations-count, .referrals-count {
+            font-size: 0.85rem;
+            color: #7f8c8d;
+        }
+        
+        .referrals-count {
+            color: #9b59b6;
+        }
+        
+        .leaderboard-item.current-user .locations-count {
+            color: #667eea;
+            font-weight: 600;
+        }
+        
+        .leaderboard-item.current-user .referrals-count {
+            color: #9b59b6;
+            font-weight: 600;
+        }
+        
+        .current-user-badge {
+            background: #3498db;
+            color: white;
+            padding: 0.2rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        
+        .no-data {
+            padding: 2rem;
+            text-align: center;
+            color: #7f8c8d;
+        }
+        
+        .no-data p:first-child {
+            font-size: 1.2rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .stats-summary {
+            background: var(--bg-surface);
+            color: var(--text-secondary);
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 2rem;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .stats-summary h3 {
+            color: var(--text-primary);
+            margin: 0 0 1rem 0;
+            font-weight: 600;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 1.5rem;
+            margin-top: 1rem;
+        }
+        
+        .stat-item {
+            text-align: center;
+            padding: 1rem;
+            background: var(--bg-surface-hover);
+            border-radius: 10px;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            display: block;
+            color: var(--stripe-purple);
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--text-tertiary);
+            font-weight: 500;
+            margin-top: 0.25rem;
+        }
+        
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            margin-bottom: 2rem;
+            transition: all 0.15s;
+            background: var(--bg-surface);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+        }
+
+        .back-link:hover {
+            border-color: var(--stripe-purple);
+            color: var(--stripe-purple);
+        }
+        
+        .navigation-links {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+        
+        @media (max-width: 480px) {
+            .navigation-links {
+                flex-direction: column;
+                align-items: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-container">
+            <div class="header-content">
+                <div class="header-text">
+                    <h1>Stripe Terminal Locator</h1>
+                    <p>Find Stripe terminal reader locations worldwide</p>
+                </div>
+                
+                <!-- Header Actions -->
+                <div class="header-actions">
+                    <div id="themeToggle" class="theme-toggle" title="Toggle dark mode">
+                        <div class="theme-toggle-track">
+                            <div class="theme-toggle-thumb">🌙</div>
+                        </div>
+                    </div>
+                    <div class="auth-section">
+                        <button id="authButton" class="btn btn-primary auth-btn">
+                            Sign In
+                        </button>
+                        <div id="userInfo" class="user-info" style="display: none;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="page-container">
+            <a href="/" class="back-link">← Back to Map</a>
+            
+            <div class="page-header">
+                <h1>🏆 Community Leaderboards</h1>
+                <p>Celebrating our top contributors and community builders</p>
+            </div>
+
+            <!-- Community Stats Summary -->
+            <div class="stats-summary">
+                <h3>Community Impact</h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span id="totalLocations" class="stat-number">0</span>
+                        <span class="stat-label">Total Locations</span>
+                    </div>
+                    <div class="stat-item">
+                        <span id="totalReferrals" class="stat-number">0</span>
+                        <span class="stat-label">Total Referrals</span>
+                    </div>
+                    <div class="stat-item">
+                        <span id="totalContributors" class="stat-number">0</span>
+                        <span class="stat-label">Contributors</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Leaderboards Grid -->
+            <div class="leaderboards-grid">
+                <!-- Locations Leaderboard -->
+                <div class="leaderboard-card">
+                    <div class="leaderboard-card-header">
+                        <h3>🗺️ Top Location Contributors</h3>
+                        <p>Users who have added the most locations</p>
+                    </div>
+                    <div class="leaderboard-card-content">
+                        <div id="locationsLeaderboardList" class="leaderboard-content active">
+                            <div class="no-data">
+                                <p>Loading...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Referrals Leaderboard -->
+                <div class="leaderboard-card">
+                    <div class="leaderboard-card-header">
+                        <h3>🎁 Top Referrers</h3>
+                        <p>Community builders who have invited the most friends</p>
+                    </div>
+                    <div class="leaderboard-card-content">
+                        <div id="referralsLeaderboardList" class="leaderboard-content active">
+                            <div class="no-data">
+                                <p>Loading...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Navigation Links -->
+            <div class="navigation-links">
+                <a href="/" class="btn btn-primary">🗺️ View Map</a>
+                <a href="/referrals.html" class="btn btn-outline">🎁 Refer Friends</a>
+            </div>
+        </div>
+    </main>
+
+    <!-- Authentication Modal -->
+    <div id="authModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Welcome to Stripe Terminal Locator</h2>
+                <span class="close" id="authModalClose">&times;</span>
+            </div>
+            <div class="auth-tabs">
+                <button id="signinTab" class="auth-tab active" onclick="switchAuthTab('signin')">Sign In</button>
+                <button id="signupTab" class="auth-tab" onclick="switchAuthTab('signup')">Sign Up</button>
+            </div>
+            
+            <!-- Sign In Form -->
+            <div id="signinForm" class="auth-form">
+                <button id="googleSignInBtn" class="btn btn-google">
+                    <img src="https://developers.google.com/identity/images/g-logo.png" alt="Google" class="google-icon">
+                    Continue with Google
+                </button>
+                
+                <div class="divider">
+                    <span>or</span>
+                </div>
+                
+                <form id="emailSignInForm">
+                    <div class="form-group">
+                        <label for="signinEmail">Email</label>
+                        <input type="email" id="signinEmail" required placeholder="your@email.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="signinPassword">Password</label>
+                        <input type="password" id="signinPassword" required placeholder="Your password">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full">Sign In</button>
+                </form>
+            </div>
+            
+            <!-- Sign Up Form -->
+            <div id="signupForm" class="auth-form" style="display: none;">
+                <button id="googleSignUpBtn" class="btn btn-google">
+                    <img src="https://developers.google.com/identity/images/g-logo.png" alt="Google" class="google-icon">
+                    Continue with Google
+                </button>
+                
+                <div class="divider">
+                    <span>or</span>
+                </div>
+                
+                <form id="emailSignUpForm">
+                    <div class="form-group">
+                        <label for="signupNickname">Nickname *</label>
+                        <input type="text" id="signupNickname" required placeholder="Your display name">
+                    </div>
+                    <div class="form-group">
+                        <label for="signupEmail">Email</label>
+                        <input type="email" id="signupEmail" required placeholder="your@email.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="signupPassword">Password</label>
+                        <input type="password" id="signupPassword" required placeholder="Choose a password">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full">Create Account</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Nickname Modal (for Google sign-in users) -->
+    <div id="nicknameModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Complete Your Profile</h2>
+            </div>
+            <form id="nicknameForm">
+                <div class="form-group">
+                    <label for="userNickname">Choose a Nickname *</label>
+                    <input type="text" id="userNickname" required placeholder="Your display name" maxlength="50">
+                    <small>This will be shown on the leaderboard</small>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Save & Continue</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Avatar Preview Overlay -->
+    <div class="avatar-overlay" id="avatarOverlay">
+        <img class="avatar-preview" id="avatarPreview" src="" alt="Avatar preview">
+    </div>
+
+    <!-- Loading Spinner -->
+    <div id="loadingSpinner" class="loading-spinner">
+        <div class="spinner"></div>
+        <p>Loading leaderboards...</p>
+    </div>
+
+    <!-- Supabase Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
+    <!-- Authentication -->
+    <script type="module" src="supabase-auth.js"></script>
+
+    <!-- Custom JavaScript -->
+    <script type="module" src="leaderboards.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var toggle = document.getElementById('themeToggle');
+            if (!toggle) return;
+            var thumb = toggle.querySelector('.theme-toggle-thumb');
+            function updateIcon() {
+                var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                if (thumb) thumb.textContent = isDark ? '☀️' : '🌙';
+            }
+            updateIcon();
+            toggle.addEventListener('click', function() {
+                var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                if (isDark) {
+                    document.documentElement.removeAttribute('data-theme');
+                    localStorage.setItem('theme', 'light');
+                } else {
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                    localStorage.setItem('theme', 'dark');
+                }
+                updateIcon();
+            });
+
+            // Avatar preview on click
+            var overlay = document.getElementById('avatarOverlay');
+            var preview = document.getElementById('avatarPreview');
+
+            document.addEventListener('click', function(e) {
+                if (e.target.classList.contains('avatar')) {
+                    preview.src = e.target.src.replace('=s64-c', '=s256-c');
+                    overlay.classList.add('active');
+                }
+            });
+
+            overlay.addEventListener('click', function() {
+                overlay.classList.remove('active');
+            });
+        });
+    </script>
+</body>
+</html>

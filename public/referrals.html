@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script>
+        (function() {
+            var theme = localStorage.getItem('theme');
+            if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            }
+        })();
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Refer Friends - Stripe Terminal Locator</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .page-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .page-header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+        
+        .page-header h1 {
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .page-header p {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+        }
+        
+        .referral-section {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            border: 1px solid #e1e8ed;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+        
+        .referral-stats-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        
+        .referral-stats-section h3 {
+            margin: 0 0 1rem 0;
+            font-size: 1.5rem;
+        }
+        
+        .referral-stats-large {
+            font-size: 3rem;
+            font-weight: bold;
+            margin: 1rem 0;
+        }
+        
+        .auth-required {
+            text-align: center;
+            padding: 3rem 2rem;
+            color: var(--text-muted);
+            background: var(--bg-surface);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+
+        .auth-required h2 {
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+        }
+        
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            margin-bottom: 2rem;
+            transition: all 0.15s;
+            background: var(--bg-surface);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+        }
+
+        .back-link:hover {
+            border-color: var(--stripe-purple);
+            color: var(--stripe-purple);
+        }
+        
+        /* QR Code Styles */
+        .qr-code-section {
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 12px;
+            border: 2px solid #e0e6ed;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .qr-code-section h4 {
+            margin: 0 0 1rem 0;
+            color: #2c3e50;
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+        
+        .qr-code-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 1.5rem 0;
+            padding: 1rem;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            min-height: 200px;
+        }
+        
+        .qr-code-container canvas {
+            border-radius: 8px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+        }
+        
+        .qr-code-instructions {
+            color: #6c757d;
+            font-size: 0.9rem;
+            margin: 1rem 0;
+            font-style: italic;
+        }
+        
+        .qr-code-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-top: 1rem;
+        }
+        
+        .referral-share {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-top: 1rem;
+        }
+        
+        @media (max-width: 768px) {
+            .qr-code-actions {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+            
+            .referral-share {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+            
+            .qr-code-section {
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-container">
+            <div class="header-content">
+                <div class="header-text">
+                    <h1>Stripe Terminal Locator</h1>
+                    <p>Find Stripe terminal reader locations worldwide</p>
+                </div>
+                
+                <!-- Header Actions -->
+                <div class="header-actions">
+                    <div id="themeToggle" class="theme-toggle" title="Toggle dark mode">
+                        <div class="theme-toggle-track">
+                            <div class="theme-toggle-thumb">🌙</div>
+                        </div>
+                    </div>
+                    <div class="auth-section">
+                        <button id="authButton" class="btn btn-primary auth-btn">
+                            Sign In
+                        </button>
+                        <div id="userInfo" class="user-info" style="display: none;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="page-container">
+            <a href="/" class="back-link">← Back to Map</a>
+            
+            <div class="page-header">
+                <h1>🎁 Refer Friends</h1>
+                <p>Share Stripe Terminal Locator with your friends and help grow our community!</p>
+            </div>
+
+            <!-- Authentication Required Message -->
+            <div id="authRequiredSection" class="auth-required">
+                <h2>🔐 Sign In Required</h2>
+                <p>Please sign in to access the referral system and start earning recognition for inviting friends.</p>
+                <button id="signInPromptBtn" class="btn btn-primary" style="margin-top: 1rem;">Sign In</button>
+            </div>
+
+            <!-- Referral Content (for authenticated users) -->
+            <div id="referralContent" style="display: none;">
+                <!-- Referral Stats -->
+                <div class="referral-stats-section">
+                    <h3>Your Referral Impact</h3>
+                    <div id="referralStatsLarge" class="referral-stats-large">0</div>
+                    <p>friends successfully referred</p>
+                </div>
+
+                <!-- Referral Tools -->
+                <div class="referral-section">
+                    <h3>🔗 Your Referral Tools</h3>
+                    <p class="referral-description">Share your unique referral code or link to invite friends. When they sign up and start contributing, you'll both be recognized in our community!</p>
+                    
+                    <div class="referral-code-section">
+                        <div class="referral-code-display">
+                            <label>Your Personal Referral Code:</label>
+                            <div class="referral-code-container">
+                                <input type="text" id="referralCodeInput" readonly>
+                                <button id="copyReferralBtn" class="btn btn-secondary btn-small" title="Copy to clipboard">📋 Copy</button>
+                                <button id="generateNewCodeBtn" class="btn btn-secondary btn-small" title="Generate new code">🔄 New Code</button>
+                            </div>
+                        </div>
+                        
+                        <div class="referral-share">
+                            <button id="shareReferralBtn" class="btn btn-primary">📤 Share Referral Link</button>
+                            <button id="generateQRBtn" class="btn btn-secondary">📱 Generate QR Code</button>
+                        </div>
+                        
+                        <!-- QR Code Display -->
+                        <div id="qrCodeSection" class="qr-code-section" style="display: none;">
+                            <h4>📱 QR Code for Easy Sharing</h4>
+                            <div id="qrCodeContainer" class="qr-code-container">
+                                <!-- QR Code will be generated here -->
+                            </div>
+                            <p class="qr-code-instructions">Scan this QR code to visit your referral link instantly!</p>
+                            <div class="qr-code-actions">
+                                <button id="downloadQRBtn" class="btn btn-secondary btn-small">💾 Download QR</button>
+                                <button id="hideQRBtn" class="btn btn-secondary btn-small">❌ Hide QR</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- How It Works -->
+                <div class="referral-section">
+                    <h3>🚀 How Referrals Work</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-top: 1rem;">
+                        <div class="info-card">
+                            <div class="info-icon">1️⃣</div>
+                            <h4>Share Your Code</h4>
+                            <p>Copy your referral code or share the link with friends who might be interested in mapping Stripe terminals.</p>
+                        </div>
+                        <div class="info-card">
+                            <div class="info-icon">2️⃣</div>
+                            <h4>Friends Sign Up</h4>
+                            <p>When your friends visit using your link and create an account, they'll be connected to your referral.</p>
+                        </div>
+                        <div class="info-card">
+                            <div class="info-icon">3️⃣</div>
+                            <h4>Earn Recognition</h4>
+                            <p>You'll be credited for each successful referral and climb the referrals leaderboard!</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="referral-section">
+                    <h3>⚡ Quick Actions</h3>
+                    <div class="quick-actions">
+                        <button id="copyLinkBtn" class="btn btn-outline">📋 Copy Referral Link</button>
+                        <a href="/leaderboards.html" class="btn btn-outline">🏆 View Leaderboards</a>
+                        <a href="/" class="btn btn-outline">🗺️ Back to Map</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Authentication Modal -->
+    <div id="authModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Welcome to Stripe Terminal Locator</h2>
+                <span class="close" id="authModalClose">&times;</span>
+            </div>
+            <div class="auth-tabs">
+                <button id="signinTab" class="auth-tab active" onclick="switchAuthTab('signin')">Sign In</button>
+                <button id="signupTab" class="auth-tab" onclick="switchAuthTab('signup')">Sign Up</button>
+            </div>
+            
+            <!-- Sign In Form -->
+            <div id="signinForm" class="auth-form">
+                <button id="googleSignInBtn" class="btn btn-google">
+                    <img src="https://developers.google.com/identity/images/g-logo.png" alt="Google" class="google-icon">
+                    Continue with Google
+                </button>
+                
+                <div class="divider">
+                    <span>or</span>
+                </div>
+                
+                <form id="emailSignInForm">
+                    <div class="form-group">
+                        <label for="signinEmail">Email</label>
+                        <input type="email" id="signinEmail" required placeholder="your@email.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="signinPassword">Password</label>
+                        <input type="password" id="signinPassword" required placeholder="Your password">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full">Sign In</button>
+                </form>
+            </div>
+            
+            <!-- Sign Up Form -->
+            <div id="signupForm" class="auth-form" style="display: none;">
+                <button id="googleSignUpBtn" class="btn btn-google">
+                    <img src="https://developers.google.com/identity/images/g-logo.png" alt="Google" class="google-icon">
+                    Continue with Google
+                </button>
+                
+                <div class="divider">
+                    <span>or</span>
+                </div>
+                
+                <form id="emailSignUpForm">
+                    <div class="form-group">
+                        <label for="signupNickname">Nickname *</label>
+                        <input type="text" id="signupNickname" required placeholder="Your display name">
+                    </div>
+                    <div class="form-group">
+                        <label for="signupEmail">Email</label>
+                        <input type="email" id="signupEmail" required placeholder="your@email.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="signupPassword">Password</label>
+                        <input type="password" id="signupPassword" required placeholder="Choose a password">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full">Create Account</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Nickname Modal (for Google sign-in users) -->
+    <div id="nicknameModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Complete Your Profile</h2>
+            </div>
+            <form id="nicknameForm">
+                <div class="form-group">
+                    <label for="userNickname">Choose a Nickname *</label>
+                    <input type="text" id="userNickname" required placeholder="Your display name" maxlength="50">
+                    <small>This will be shown on the leaderboard</small>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Save & Continue</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Loading Spinner -->
+    <div id="loadingSpinner" class="loading-spinner">
+        <div class="spinner"></div>
+        <p>Loading...</p>
+    </div>
+
+    <!-- Supabase Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
+    <!-- Authentication -->
+    <script type="module" src="supabase-auth.js"></script>
+
+    <!-- QR Code Library -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+
+    <!-- Custom JavaScript -->
+    <script type="module" src="referrals.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var toggle = document.getElementById('themeToggle');
+            if (!toggle) return;
+            var thumb = toggle.querySelector('.theme-toggle-thumb');
+            function updateIcon() {
+                var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                if (thumb) thumb.textContent = isDark ? '☀️' : '🌙';
+            }
+            updateIcon();
+            toggle.addEventListener('click', function() {
+                var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                if (isDark) {
+                    document.documentElement.removeAttribute('data-theme');
+                    localStorage.setItem('theme', 'light');
+                } else {
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                    localStorage.setItem('theme', 'dark');
+                }
+                updateIcon();
+            });
+        });
+    </script>
+</body>
+</html>
